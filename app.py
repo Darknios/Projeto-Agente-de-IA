@@ -644,7 +644,7 @@ def gerar_resposta(pergunta: str, chunks: List[Dict], usar_gemini: bool, modelo:
     return resposta_local(pergunta, contextos), contextos, False
 
 
-paginas, chunks = carregar_manual()
+paginas, chunks = manual_credenciape_paginas.json()
 
 with st.sidebar:
     st.image(str(ASSETS_DIR / "logo_credencia_pe.jpeg"), use_container_width=True)
