@@ -10,11 +10,9 @@ from typing import Dict, List, Tuple
 
 import streamlit as st
 
-BASE_DIR = Path(__file__).parent
-ASSETS_DIR = BASE_DIR / "assets"
-MANUAL_JSON = "manual_credenciape_paginas.json"
-MANUAL_PDF = "manual_credenciape.pdf"
-ENV_FILE = ".env"
+MANUAL_JSON = BASE_DIR / "manual_credenciape_paginas.json"
+MANUAL_PDF = BASE_DIR / "manual_credenciape.pdf"
+ENV_FILE = BASE_DIR / ".env"
 
 AZUL_ESCURO = "#173B8F"
 AZUL = "#235EE8"
