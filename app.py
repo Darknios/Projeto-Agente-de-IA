@@ -12,7 +12,7 @@ import streamlit as st
 
 BASE_DIR = Path(__file__).parent
 ASSETS_DIR = BASE_DIR / "assets"
-MANUAL_JSON = DATA_DIR / "manual_credenciape_paginas.json"
+MANUAL_JSON = "manual_credenciape_paginas.json"
 MANUAL_PDF = DATA_DIR / "manual_credenciape.pdf"
 ENV_FILE = BASE_DIR / ".env"
 
