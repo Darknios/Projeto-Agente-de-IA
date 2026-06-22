@@ -13,8 +13,8 @@ import streamlit as st
 BASE_DIR = Path(__file__).parent
 ASSETS_DIR = BASE_DIR / "assets"
 MANUAL_JSON = "manual_credenciape_paginas.json"
-MANUAL_PDF = DATA_DIR / "manual_credenciape.pdf"
-ENV_FILE = BASE_DIR / ".env"
+MANUAL_PDF = "manual_credenciape.pdf"
+ENV_FILE = ".env"
 
 AZUL_ESCURO = "#173B8F"
 AZUL = "#235EE8"
