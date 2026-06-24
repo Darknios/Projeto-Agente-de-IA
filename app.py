@@ -1,4 +1,4 @@
-﻿import json
+import json
 import os
 import re
 import unicodedata
@@ -349,7 +349,189 @@ def carregar_manual() -> Tuple[List[Dict], List[Dict]]:
     return paginas, chunks
 
 
+GUIAS_LOCAIS = [
+    {
+        "id": "primeiro_login",
+        "termos": ["primeiro login", "primeiro acesso", "aceitar convite"],
+        "paginas": [3, 4, 5],
+        "resposta": """Para fazer o primeiro login, comece pelo convite enviado ao e-mail cadastrado no credenciamento.
+
+1. Abra o e-mail cadastrado no credenciamento.
+2. Confira se recebeu o e-mail com as credenciais de acesso.
+3. Clique em "Aceitar convite".
+4. Informe a senha desejada nos dois campos.
+5. Redefina a senha para acessar o sistema.
+6. No primeiro acesso, entre no menu Cadastro.
+7. Clique em "Complete seu cadastro".
+8. Preencha as informações obrigatórias e clique em Salvar.
+9. Clique em "Finalizar Cadastro".
+
+Atenção: no primeiro acesso, é necessário completar o cadastro para liberar as demais funcionalidades. Para usuário interno, o manual informa que é necessário preencher apenas o CPF. Para usuário externo, são solicitadas informações adicionais.
+
+Fonte: Manual CredenciaPE, págs. 3 a 5.""",
+    },
+    {
+        "id": "login",
+        "termos": ["login", "entrar", "acessar sistema"],
+        "paginas": [3, 5],
+        "resposta": """Para acessar o CredenciaPE, entre pelo link do sistema e informe seus dados de acesso.
+
+1. Acesse http://credencia.pe.gov.br.
+2. Informe o e-mail cadastrado.
+3. Informe sua senha.
+4. Confirme o acesso para entrar no sistema.
+
+Atenção: após realizar o login pela primeira vez, o manual informa que é necessário completar o cadastro para ter acesso às outras funcionalidades.
+
+Fonte: Manual CredenciaPE, págs. 3 e 5.""",
+    },
+    {
+        "id": "redefinir_senha",
+        "termos": ["esqueci senha", "redefinir senha", "recuperar senha", "senha"],
+        "paginas": [5, 6],
+        "resposta": """Para redefinir sua senha, use a opção de redefinição na tela de acesso do sistema.
+
+1. Acesse http://credencia.pe.gov.br.
+2. Clique no botão "Redefinir senha".
+3. Informe o e-mail cadastrado no sistema.
+4. Clique novamente em "Redefinir Senha".
+5. Abra o e-mail cadastrado.
+6. Clique no botão "Redefinir Senha" recebido por e-mail.
+
+Atenção: o manual orienta usar o e-mail cadastrado no sistema. Se o e-mail informado não for o cadastrado, a recuperação pode não funcionar.
+
+Fonte: Manual CredenciaPE, págs. 5 e 6.""",
+    },
+    {
+        "id": "cadastrar_edital",
+        "termos": ["cadastrar edital", "novo edital", "criar edital"],
+        "paginas": [8, 9, 10, 11, 12, 13],
+        "resposta": """Para cadastrar um edital, entre no menu Edital e crie um novo registro.
+
+1. Acesse o módulo de Credenciamento.
+2. Clique no menu Edital.
+3. Clique no botão "Novo".
+4. Preencha as informações solicitadas.
+5. Clique em "Salvar".
+6. Se necessário, complete as abas do edital: Habilitação Jurídica, Habilitação Técnica, Anexos, Lotes e Atas.
+7. Em Habilitação Jurídica, adicione os documentos obrigatórios para o credenciamento.
+8. Em Habilitação Técnica, adicione os documentos exigidos para cada atividade.
+9. Em Anexos, selecione os arquivos do edital e salve.
+10. Em Lotes, adicione os lotes, preencha o nome e selecione os endereços.
+
+Atenção: o manual informa que o cadastro de lotes é obrigatório para editais na modalidade "Paralelo e não excludente". Também informa que os tipos de documentos obrigatórios precisam estar cadastrados antes de serem vinculados ao edital.
+
+Fonte: Manual CredenciaPE, págs. 8 a 13.""",
+    },
+    {
+        "id": "publicar_edital",
+        "termos": ["publicar edital", "publicação edital", "publicacao edital"],
+        "paginas": [14],
+        "resposta": """Para publicar um edital, abra o edital já cadastrado e use a ação de publicação.
+
+1. Acesse a página do edital.
+2. Confira se o cadastro do edital está completo.
+3. Clique no botão "Publicar".
+
+Atenção: depois de publicado, o edital aparece na listagem do site. O manual informa que somente usuários com perfil Admin e Master têm permissão para publicar edital.
+
+Fonte: Manual CredenciaPE, pág. 14.""",
+    },
+    {
+        "id": "analisar_credenciamento",
+        "termos": ["analisar solicitação de credenciamento", "analisar solicitacao de credenciamento", "analisar credenciamento", "solicitação de credenciamento", "solicitacao de credenciamento"],
+        "paginas": [17, 18, 19],
+        "resposta": """Para analisar uma solicitação de credenciamento, abra a solicitação enviada pelo fornecedor e inicie a análise.
+
+1. Acesse o módulo de Credenciamento.
+2. Clique em Credenciamento.
+3. Abra uma solicitação com status "Enviado".
+4. Clique em "Iniciar Análise".
+5. Analise cada documento com status pendente.
+6. Para aprovar um documento, clique em "Aprovar".
+7. Para reprovar, selecione a devolutiva adequada e clique em "Reprovar".
+8. Depois de analisar todos os documentos, clique em "Concluir Análise Jurídica".
+
+Atenção: se algum documento for reprovado, a solicitação volta para o fornecedor corrigir e reenviar, ficando com status "Pendente". Se todos os documentos forem aprovados, a solicitação fica como "Aguardando Publicação" e será necessário gerar e publicar a ata de credenciamento. Quando houver habilitação técnica no edital, após a análise jurídica a solicitação segue para análise técnica.
+
+Fonte: Manual CredenciaPE, págs. 17 a 19.""",
+    },
+    {
+        "id": "cadastrar_cotacao",
+        "termos": ["cadastrar cotação", "cadastrar cotacao", "nova cotação", "nova cotacao", "criar cotação", "criar cotacao"],
+        "paginas": [31, 32, 33, 34, 37, 38],
+        "resposta": """Para cadastrar uma cotação, entre no módulo Cotação, escolha o tipo de cotação e crie um novo cadastro.
+
+1. Clique no menu Cotação.
+2. Escolha o tipo de cotação.
+3. Clique no botão "Novo".
+4. Preencha as informações solicitadas.
+5. Clique em "Salvar".
+6. Depois de salvar, confira os dados gerados automaticamente, como data de término e prazo de entrega, conforme os termos do edital.
+7. Antes de finalizar o cadastro, insira as informações ou itens exigidos pela cotação.
+8. Clique em "Finalizar Cadastro".
+9. Verifique se o status da cotação foi alterado.
+
+Atenção: o manual informa que a proposta só poderá ser cadastrada após a data e hora de início da cotação. Também informa que a data de início da cotação não pode ser inferior a 60 minutos, ou 1 hora, da hora de cadastro. Após finalizar, a cotação passa para "Aguardando aprovação"; depois da aprovação, entra em "Para Cotação" e fica disponível aos fornecedores a partir da data de início definida.
+
+Fonte: Manual CredenciaPE, págs. 31 a 38.""",
+    },
+    {
+        "id": "assinar_documento",
+        "termos": ["assinar documento", "assinar um documento", "assinatura documento", "como assinar"],
+        "paginas": [55, 56, 57],
+        "resposta": """Para assinar um documento, use o módulo de Assinatura do sistema.
+
+1. Acesse o módulo de Assinatura.
+2. Localize o documento que precisa ser assinado.
+3. Abra o documento desejado.
+4. Confira as informações do documento antes de assinar.
+5. Siga o fluxo de assinatura apresentado pelo sistema.
+
+Atenção: no texto extraído do manual, o módulo de Assinatura aparece no sumário com os itens "Como assinar um documento", "Assinante" e "Fluxo de Assinatura", mas o passo a passo detalhado não ficou disponível de forma completa. Por isso, não vou inventar nomes de botões ou telas além do que o manual carregado permite confirmar.
+
+Fonte: Manual CredenciaPE, págs. 55 a 57.""",
+    },
+]
+
+
+def identificar_guia_local(pergunta: str) -> Dict:
+    pergunta_norm = normalizar(pergunta)
+    if not pergunta_norm:
+        return {}
+
+    for guia in GUIAS_LOCAIS:
+        for termo in guia["termos"]:
+            if normalizar(termo) in pergunta_norm:
+                if guia["id"] == "login" and "primeiro" in pergunta_norm:
+                    continue
+                return guia
+    return {}
+
+
+def chunks_por_paginas(chunks: List[Dict], paginas_alvo: List[int], limite: int) -> List[Dict]:
+    escolhidos = []
+    paginas_usadas = set()
+    for pagina in paginas_alvo:
+        for chunk in chunks:
+            if chunk["page"] == pagina and chunk["page"] not in paginas_usadas:
+                item = dict(chunk)
+                item["score"] = 100
+                escolhidos.append(item)
+                paginas_usadas.add(chunk["page"])
+                break
+        if len(escolhidos) >= limite:
+            break
+    return escolhidos
+
+
 def buscar_no_manual(pergunta: str, chunks: List[Dict], limite: int = 5) -> List[Dict]:
+    guia = identificar_guia_local(pergunta)
+    if guia:
+        encontrados = chunks_por_paginas(chunks, guia["paginas"], limite)
+        if encontrados:
+            return encontrados
+
     pergunta_norm = normalizar(pergunta)
     q_tokens = tokens_relevantes(pergunta)
     q_set = set(q_tokens)
@@ -380,6 +562,9 @@ def buscar_no_manual(pergunta: str, chunks: List[Dict], limite: int = 5) -> List
         if pergunta_norm and pergunta_norm in c_norm:
             score += 30
 
+        if chunk["page"] in (1, 2):
+            score *= 0.25
+
         if score > 0:
             item = dict(chunk)
             item["score"] = score
@@ -396,9 +581,13 @@ def buscar_no_manual(pergunta: str, chunks: List[Dict], limite: int = 5) -> List
         if len(escolhidos) >= limite:
             break
 
-    if not escolhidos and chunks:
-        escolhidos = chunks[:2]
     return escolhidos
+
+
+def resposta_sem_referencia_ao_manual() -> str:
+    return (
+        "Eu não sei responder essa pergunta porque ela não tem referência ao manual do CredenciaPE."
+    )
 
 
 def montar_contexto(contextos: List[Dict], max_chars: int = 9000) -> str:
@@ -556,13 +745,16 @@ Seu papel é ajudar usuários a usar o sistema com base EXCLUSIVAMENTE no manual
 
 REGRAS IMPORTANTES:
 1. Responda em português do Brasil.
-2. Use linguagem clara, educada, simples e direta.
+2. Use linguagem clara, educada, simples e direta, como se estivesse orientando uma pessoa que está usando o sistema agora.
 3. Responda apenas com base no CONTEXTO DO MANUAL.
 4. Se a resposta não estiver no contexto, diga: "Não encontrei essa informação no manual enviado." Em seguida, peça para o usuário detalhar a dúvida ou consultar o suporte responsável.
 5. Não invente prazos, regras, permissões, links, valores, nomes de telas ou procedimentos.
-6. Quando houver passo a passo, use lista numerada.
-7. Quando útil, cite a página do manual usando o formato: "(Manual, pág. X)".
-8. Se a pergunta for confusa, faça uma pergunta curta para entender melhor.
+6. Quando o manual trouxer etapas, explique em passo a passo numerado, com frases curtas e ações diretas.
+7. Quando o manual citar observações, permissões, status ou condições, destaque essas informações em uma seção "Atenção:".
+8. Não copie o trecho bruto do manual quando ele estiver confuso. Reescreva com o mesmo sentido, de forma mais organizada e objetiva.
+9. Comece pela resposta direta. Depois, se necessário, detalhe os passos.
+10. Quando útil, cite a página do manual usando o formato: "(Manual, pág. X)".
+11. Se a pergunta for confusa, faça uma pergunta curta para entender melhor.
 
 CONTEXTO DO MANUAL:
 {contexto}
@@ -579,12 +771,19 @@ RESPOSTA:
     raise RuntimeError("OpenRouter não retornou texto")
 
 def resposta_local(pergunta: str, contextos: List[Dict]) -> str:
+    guia = identificar_guia_local(pergunta)
+    if guia:
+        return guia["resposta"]
+
     if not contextos:
-        return "Não encontrei essa informação no manual enviado. Tente escrever a dúvida com outras palavras."
+        return resposta_sem_referencia_ao_manual()
 
     paginas = ", ".join(str(c["page"]) for c in contextos[:3])
     principal = contextos[0]
     texto = principal["text"]
+    texto = re.sub(r"Documento não controlado após impressão\s+\d+", " ", texto, flags=re.IGNORECASE)
+    texto = re.sub(r"conforme imagem abaixo", "", texto, flags=re.IGNORECASE)
+    texto = re.sub(r"\s+", " ", texto).strip()
 
     frases = re.split(r"(?<=[.!?])\s+", texto)
     q_tokens = set(tokens_relevantes(pergunta))
@@ -600,9 +799,16 @@ def resposta_local(pergunta: str, contextos: List[Dict]) -> str:
     if not melhores:
         melhores = frases[:4]
 
-    corpo = "\n".join([f"{i+1}. {f}" for i, f in enumerate(melhores[:5])])
+    melhores_limpas = []
+    for frase in melhores[:5]:
+        frase = frase.strip(" -•")
+        frase = re.sub(r"^\d+\)\s*", "", frase)
+        if frase and frase not in melhores_limpas:
+            melhores_limpas.append(frase)
+
+    corpo = "\n".join([f"{i+1}. {f}" for i, f in enumerate(melhores_limpas)])
     return (
-        "Estou em modo local. Encontrei no manual estes trechos relacionados:\n\n"
+        "Encontrei estas orientações no manual e organizei em formato direto:\n\n"
         f"{corpo}\n\n"
         f"Fonte: Manual CredenciaPE, pág. {principal['page']}. Páginas relacionadas: {paginas}."
     )
@@ -610,16 +816,14 @@ def resposta_local(pergunta: str, contextos: List[Dict]) -> str:
 
 def gerar_resposta(pergunta: str, chunks: List[Dict], usar_ia: bool, modelo: str) -> Tuple[str, List[Dict], bool]:
     contextos = buscar_no_manual(pergunta, chunks)
+    if not contextos:
+        return resposta_sem_referencia_ao_manual(), contextos, False
+
     if usar_ia:
         try:
             return responder_com_openrouter(pergunta, contextos, modelo), contextos, True
         except Exception as exc:
-            return (
-                resposta_local(pergunta, contextos)
-                + f"\n\nObservação técnica: o OpenRouter não respondeu agora ({exc}).",
-                contextos,
-                False,
-            )
+            return resposta_local(pergunta, contextos), contextos, False
     return resposta_local(pergunta, contextos), contextos, False
 
 
