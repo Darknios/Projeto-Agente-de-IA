@@ -1,5 +1,7 @@
 # Assistente Virtual CredenciaPE - Streamlit + OpenRouter + Manual
 
+Link: https://projeto-agente-de-ia-mucwnfknfb9vjq6fidyyba.streamlit.app/
+
 Projeto de chatbot institucional para apoiar usuários do CredenciaPE/GESIG com respostas baseadas no manual carregado.
 
 ## O que vem pronto
