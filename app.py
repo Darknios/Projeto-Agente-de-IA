@@ -3,7 +3,6 @@ import os
 import re
 import unicodedata
 import urllib.error
-import urllib.parse
 import urllib.request
 from pathlib import Path
 from typing import Dict, List, Tuple
@@ -12,9 +11,9 @@ import streamlit as st
 
 BASE_DIR = Path(__file__).parent
 ASSETS_DIR = BASE_DIR / "assets"
-
-MANUAL_JSON = BASE_DIR / "manual_credenciape_paginas.json"
-MANUAL_PDF = BASE_DIR / "manual_credenciape.pdf"
+DATA_DIR = BASE_DIR / "data"
+MANUAL_JSON = DATA_DIR / "manual_credenciape_paginas.json"
+MANUAL_PDF = DATA_DIR / "manual_credenciape.pdf"
 ENV_FILE = BASE_DIR / ".env"
 
 AZUL_ESCURO = "#173B8F"
@@ -460,7 +459,6 @@ def obter_secret(nome: str, default: str = "") -> str:
 def limpar_chave(valor: str) -> str:
     valor = (valor or "").strip().strip('"').strip("'")
     placeholders = {
-        "SUA_CHAVE_GEMINI_AQUI",
         "SUA_CHAVE_AQUI",
         "COLE_SUA_CHAVE_AQUI",
         "",
@@ -470,28 +468,20 @@ def limpar_chave(valor: str) -> str:
     return valor
 
 
-def obter_chave_gemini() -> str:
+def obter_chave_openrouter() -> str:
     return limpar_chave(
-        obter_config("GEMINI_API_KEY")
-        or obter_config("GOOGLE_API_KEY")
+        obter_config("OPENROUTER_API_KEY")
     )
 
 
-def origem_chave_gemini() -> str:
-    if limpar_chave(obter_config("GEMINI_API_KEY")):
-        return origem_config("GEMINI_API_KEY")
-    if limpar_chave(obter_config("GOOGLE_API_KEY")):
-        return origem_config("GOOGLE_API_KEY")
+def origem_chave_openrouter() -> str:
+    if limpar_chave(obter_config("OPENROUTER_API_KEY")):
+        return origem_config("OPENROUTER_API_KEY")
     return "não encontrada"
 
 
 def formato_chave_suspeito(api_key: str) -> bool:
-    """Detecta apenas tokens OAuth comuns.
-
-    Algumas chaves recentes exibidas no Google AI Studio podem começar com AQ.,
-    então esse formato NÃO deve ser bloqueado. O token OAuth mais comum começa
-    com ya29. e realmente costuma causar erro de autenticação quando usado como API key.
-    """
+    """Detecta tokens OAuth comuns que não devem ser usados como API key."""
     if not api_key:
         return False
     if api_key.startswith("ya29."):
@@ -507,56 +497,27 @@ def mascarar_chave(api_key: str) -> str:
     return f"{api_key[:6]}...{api_key[-4:]}"
 
 
-def extrair_texto_resposta(response) -> str:
-    texto = getattr(response, "text", "") or ""
-    if texto:
-        return texto.strip()
-
-    # Fallback para objetos/dicionários diferentes entre versões de SDK.
-    try:
-        data = response.to_dict()
-    except Exception:
-        try:
-            data = response.to_json_dict()
-        except Exception:
-            data = None
-
-    if isinstance(data, dict):
-        try:
-            parts = data["candidates"][0]["content"]["parts"]
-            return "".join(p.get("text", "") for p in parts).strip()
-        except Exception:
-            return ""
-    return ""
-
-
-def chamar_gemini_rest(api_key: str, modelo: str, prompt: str) -> str:
-    """Fallback via REST: funciona mesmo se a biblioteca Gemini não importar."""
-    modelo_limpo = modelo.replace("models/", "").strip() or "gemini-2.5-flash"
-    # A Gemini Developer API autentica por API key no header x-goog-api-key.
-    # Não usamos Authorization: Bearer, porque isso geraria erro de OAuth/token.
-    url = (
-        "https://generativelanguage.googleapis.com/v1beta/models/"
-        f"{urllib.parse.quote(modelo_limpo, safe='')}:generateContent"
-    )
+def chamar_openrouter_rest(api_key: str, modelo: str, prompt: str) -> str:
+    """Chama a API OpenRouter usando o endpoint compativel com Chat Completions."""
+    modelo_limpo = (modelo or "google/gemini-2.5-flash").strip()
+    url = "https://openrouter.ai/api/v1/chat/completions"
     payload = {
-        "contents": [
-            {
-                "role": "user",
-                "parts": [{"text": prompt}],
-            }
-        ],
-        "generationConfig": {
-            "temperature": 0.2,
-            "topP": 0.8,
-            "maxOutputTokens": 1400,
-        },
+        "model": modelo_limpo,
+        "messages": [{"role": "user", "content": prompt}],
+        "temperature": 0.2,
+        "top_p": 0.8,
+        "max_tokens": 1400,
     }
     body = json.dumps(payload).encode("utf-8")
     request = urllib.request.Request(
         url,
         data=body,
-        headers={"Content-Type": "application/json", "x-goog-api-key": api_key},
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {api_key}",
+            "HTTP-Referer": "http://localhost:8501",
+            "X-Title": "Assistente CredenciaPE",
+        },
         method="POST",
     )
     try:
@@ -564,27 +525,27 @@ def chamar_gemini_rest(api_key: str, modelo: str, prompt: str) -> str:
             data = json.loads(resp.read().decode("utf-8"))
     except urllib.error.HTTPError as exc:
         detalhe = exc.read().decode("utf-8", errors="ignore")[:600]
-        raise RuntimeError(f"erro HTTP Gemini {exc.code}: {detalhe}") from exc
+        raise RuntimeError(f"erro HTTP OpenRouter {exc.code}: {detalhe}") from exc
     except urllib.error.URLError as exc:
-        raise RuntimeError(f"sem conexão com a API Gemini: {exc.reason}") from exc
+        raise RuntimeError(f"sem conexao com a API OpenRouter: {exc.reason}") from exc
 
     try:
-        parts = data["candidates"][0]["content"]["parts"]
-        return "".join(p.get("text", "") for p in parts).strip()
+        message = data["choices"][0]["message"]["content"]
+        if isinstance(message, list):
+            return "".join(part.get("text", "") for part in message if isinstance(part, dict)).strip()
+        return str(message).strip()
     except Exception:
-        raise RuntimeError(f"resposta Gemini inesperada: {str(data)[:600]}")
+        raise RuntimeError(f"resposta OpenRouter inesperada: {str(data)[:600]}")
 
-
-def responder_com_gemini(pergunta: str, contextos: List[Dict], modelo: str) -> str:
-    api_key = obter_chave_gemini()
+def responder_com_openrouter(pergunta: str, contextos: List[Dict], modelo: str) -> str:
+    api_key = obter_chave_openrouter()
     if not api_key:
-        raise RuntimeError("GEMINI_API_KEY/GOOGLE_API_KEY não configurada")
+        raise RuntimeError("OPENROUTER_API_KEY não configurada")
 
     if formato_chave_suspeito(api_key):
         raise RuntimeError(
-            "A chave detectada parece ser token OAuth/login, não uma API key do Gemini. "
-            "Cole no .env a chave copiada em Google AI Studio > API keys. "
-            "Também confira se não existe chave antiga em .streamlit/secrets.toml."
+            "A chave detectada parece ser token OAuth/login, não uma API key do OpenRouter. "
+            "Cole no .env a chave copiada no painel do OpenRouter."
         )
 
     contexto = montar_contexto(contextos)
@@ -611,60 +572,10 @@ PERGUNTA DO USUÁRIO:
 RESPOSTA:
 """.strip()
 
-    modelo = (modelo or "gemini-2.5-flash").strip()
-
-    # 1) REST direto primeiro: é o caminho mais simples e evita conflito de SDK/credenciais.
-    erro_rest = ""
-    try:
-        texto = chamar_gemini_rest(api_key=api_key, modelo=modelo, prompt=prompt)
-        if texto:
-            return texto
-    except Exception as exc:
-        erro_rest = str(exc)
-
-    # 2) SDK novo: google-genai
-    erro_sdk_novo = ""
-    try:
-        from google import genai
-
-        client = genai.Client(api_key=api_key)
-        response = client.models.generate_content(
-            model=modelo,
-            contents=prompt,
-        )
-        texto = extrair_texto_resposta(response)
-        if texto:
-            return texto
-    except ImportError:
-        pass
-    except Exception as exc:
-        erro_sdk_novo = str(exc)
-
-    # 3) SDK antigo: google-generativeai
-    erro_sdk_antigo = ""
-    try:
-        import google.generativeai as genai_antigo
-
-        genai_antigo.configure(api_key=api_key)
-        response = genai_antigo.GenerativeModel(modelo).generate_content(prompt)
-        texto = extrair_texto_resposta(response)
-        if texto:
-            return texto
-    except ImportError:
-        pass
-    except Exception as exc:
-        erro_sdk_antigo = str(exc)
-
-    detalhes = erro_rest or "Gemini não retornou texto"
-    extras = []
-    if erro_sdk_novo:
-        extras.append(f"SDK novo: {erro_sdk_novo[:180]}")
-    if erro_sdk_antigo:
-        extras.append(f"SDK antigo: {erro_sdk_antigo[:180]}")
-    if extras:
-        detalhes += " | " + " | ".join(extras)
-    raise RuntimeError(detalhes)
-
+    texto = chamar_openrouter_rest(api_key=api_key, modelo=modelo, prompt=prompt)
+    if texto:
+        return texto
+    raise RuntimeError("OpenRouter não retornou texto")
 
 def resposta_local(pergunta: str, contextos: List[Dict]) -> str:
     if not contextos:
@@ -696,15 +607,15 @@ def resposta_local(pergunta: str, contextos: List[Dict]) -> str:
     )
 
 
-def gerar_resposta(pergunta: str, chunks: List[Dict], usar_gemini: bool, modelo: str) -> Tuple[str, List[Dict], bool]:
+def gerar_resposta(pergunta: str, chunks: List[Dict], usar_ia: bool, modelo: str) -> Tuple[str, List[Dict], bool]:
     contextos = buscar_no_manual(pergunta, chunks)
-    if usar_gemini:
+    if usar_ia:
         try:
-            return responder_com_gemini(pergunta, contextos, modelo), contextos, True
+            return responder_com_openrouter(pergunta, contextos, modelo), contextos, True
         except Exception as exc:
             return (
                 resposta_local(pergunta, contextos)
-                + f"\n\nObservação técnica: o Gemini não respondeu agora ({exc}).",
+                + f"\n\nObservação técnica: o OpenRouter não respondeu agora ({exc}).",
                 contextos,
                 False,
             )
@@ -714,39 +625,39 @@ def gerar_resposta(pergunta: str, chunks: List[Dict], usar_gemini: bool, modelo:
 paginas, chunks = carregar_manual()
 
 with st.sidebar:
-    st.image(str("logo_credencia_pe.jpeg"), use_container_width=True)
-    st.image(str("logo_gesig.jpeg"), use_container_width=True)
+    st.image(str(ASSETS_DIR / "logo_credencia_pe.jpeg"), use_container_width=True)
+    st.image(str(ASSETS_DIR / "logo_gesig.jpeg"), use_container_width=True)
 
     st.markdown("### Configuração")
-    gemini_key = obter_chave_gemini()
-    usar_gemini = bool(gemini_key)
+    openrouter_key = obter_chave_openrouter()
+    usar_openrouter = bool(openrouter_key)
     st.toggle(
-        "Usar Gemini",
-        value=usar_gemini,
+        "Usar OpenRouter",
+        value=usar_openrouter,
         disabled=True,
-        help="O Gemini fica ativo automaticamente quando há GEMINI_API_KEY ou GOOGLE_API_KEY configurada.",
+        help="O OpenRouter fica ativo automaticamente quando há OPENROUTER_API_KEY configurada.",
     )
-    modelo = st.text_input("Modelo Gemini", value=obter_secret("GEMINI_MODEL", "gemini-2.5-flash"))
+    modelo = st.text_input("Modelo OpenRouter", value=obter_secret("OPENROUTER_MODEL", "google/gemini-2.5-flash"))
 
-    chave_origem = origem_chave_gemini()
-    if gemini_key:
-        st.success(f"Chave detectada: {mascarar_chave(gemini_key)}")
+    chave_origem = origem_chave_openrouter()
+    if openrouter_key:
+        st.success(f"Chave detectada: {mascarar_chave(openrouter_key)}")
         st.caption(f"Origem da chave usada: {chave_origem}")
-        if formato_chave_suspeito(gemini_key):
-            st.error("Formato suspeito: parece token OAuth/login. Troque pela chave copiada em Google AI Studio > API keys.")
+        if formato_chave_suspeito(openrouter_key):
+            st.error("Formato suspeito: parece token OAuth/login. Troque pela chave copiada no painel do OpenRouter.")
         else:
-            st.caption("Se ainda cair no modo local, confira internet, cota da API ou modelo informado.")
+            st.caption("Se ainda cair no modo local, confira internet, créditos/cota do OpenRouter ou modelo informado.")
     else:
-        st.warning("Sem chave Gemini. O app usa busca local no manual.")
-        st.caption("Crie um arquivo .env com GEMINI_API_KEY=...")
+        st.warning("Sem chave OpenRouter. O app usa busca local no manual.")
+        st.caption("Crie um arquivo .env com OPENROUTER_API_KEY=...")
 
-    with st.expander("Diagnóstico Gemini"):
+    with st.expander("Diagnóstico OpenRouter"):
         st.write("`.env` encontrado:", ENV_FILE.exists())
-        st.write("Chave configurada:", bool(gemini_key))
+        st.write("Chave configurada:", bool(openrouter_key))
         st.write("Origem da chave:", chave_origem)
-        st.write("Formato suspeito:", formato_chave_suspeito(gemini_key))
+        st.write("Formato suspeito:", formato_chave_suspeito(openrouter_key))
         st.write("Modelo:", modelo)
-        st.write("Fallback REST:", "ativo")
+        st.write("Endpoint REST:", "OpenRouter")
 
     st.markdown("### Manual")
     st.markdown(
@@ -792,7 +703,7 @@ st.markdown(
         <div class="pill-row">
             <span class="pill">📘 Baseado no manual</span>
             <span class="pill">🔎 Busca por página</span>
-            <span class="pill">🤖 Gemini opcional</span>
+            <span class="pill">🤖 OpenRouter opcional</span>
             <span class="pill">🔵 Interface institucional azul</span>
         </div>
     </section>
@@ -818,8 +729,8 @@ with c2:
 with c3:
     st.markdown("""
     <div class="info-card">
-        <h3>Pronto para Gemini</h3>
-        <div class="small-muted">Lê .env, secrets do Streamlit ou variável do Windows. Também tem fallback REST sem depender do SDK.</div>
+        <h3>Pronto para OpenRouter</h3>
+        <div class="small-muted">Lê .env, secrets do Streamlit ou variável do Windows e chama a API via REST.</div>
     </div>
     """, unsafe_allow_html=True)
 
@@ -882,7 +793,7 @@ if pergunta:
 
     with st.chat_message("assistant"):
         with st.spinner("Consultando o manual..."):
-            resposta, fontes, usou_ia = gerar_resposta(pergunta, chunks, usar_gemini, modelo)
+            resposta, fontes, usou_ia = gerar_resposta(pergunta, chunks, usar_openrouter, modelo)
         st.markdown(resposta)
         with st.expander("Trechos do manual usados na resposta"):
             for fonte in fontes:
@@ -911,3 +822,5 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
+
